@@ -14,16 +14,16 @@ param rgDevName string = 'rg-hermes-dev'
 param rgProdName string = 'rg-hermes-prod'
 
 @description('ACR name (must be globally unique)')
-param acrName string = 'ocrocagentdev'
+param acrName string = 'hermesagentdev'
 
 @description('ACR SKU')
 param acrSku string = 'Basic'
 
 @description('Container Apps environment name for dev')
-param acaEnvDevName string = 'oclaw-env-dev'
+param acaEnvDevName string = 'hermes-env-dev'
 
 @description('Container Apps environment name for prod')
-param acaEnvProdName string = 'oclaw-env-prod'
+param acaEnvProdName string = 'hermes-env-prod'
 
 @description('List of agent names to create Container Apps for')
 param agentNames array = [
@@ -36,7 +36,7 @@ param agentNames array = [
 param hermesAIContainerAppCount int = 0
 
 @description('Log Analytics workspace name')
-param logAnalyticsName string = 'oclaw-logs'
+param logAnalyticsName string = 'hermes-logs'
 
 // ──────────────────────────────────────────────
 // Resource Groups

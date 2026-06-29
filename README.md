@@ -24,7 +24,7 @@ Azure Hermes Factory provides a complete, production-ready deployment architectu
 ├── agents/                  # Hermes agent container definitions
 │   ├── hermes/             # Core Hermes agent
 │   ├── analyst/            # Analyst agent
-│   ├── openclaw/           # Generic Hermes AI container
+│   ├── hermes-ai/          # Generic Hermes AI container
 │   ├── src/                # Agent source code and runtime logic
 │   └── config/             # Agent configuration files (hermes.json)
 ├── infra/                   # Infrastructure as Code
@@ -128,12 +128,12 @@ To rollback a deployment to a previous version:
 ```bash
 ./scripts/rollback.sh <agent-name> <environment> <image-tag>
 # Example:
-./scripts/rollback.sh hermes dev oc-abc1234
+./scripts/rollback.sh hermes dev hermes-abc1234
 ```
 
 ## Monitoring & Logs
 
-Logs are centralized in Log Analytics workspace: `oclaw-logs`
+Logs are centralized in Log Analytics workspace: `hermes-logs`
 
 Query recent logs:
 ```bash

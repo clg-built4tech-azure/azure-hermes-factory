@@ -1,7 +1,7 @@
 const http = require("node:http");
 const { spawn } = require("node:child_process");
 
-const agentName = process.env.AGENT_NAME || "hermes-agent";
+const agentName = process.env.AGENT_NAME || "hermes-ai";
 const port = Number(process.env.PORT || 8080);
 const gatewayPort = process.env.HERMES_GATEWAY_PORT || "19001";
 
@@ -46,7 +46,7 @@ const server = http.createServer((req, res) => {
   }
 
   res.writeHead(200, { "content-type": "application/json" });
-  res.end(JSON.stringify({ agent: agentName, runtime: "hermes-agent" }));
+  res.end(JSON.stringify({ agent: agentName, runtime: "hermes" }));
 });
 
 server.listen(port, "0.0.0.0", () => {

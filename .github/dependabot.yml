@@ -10,7 +10,7 @@ updates:
     directories:
       - "/agents/analyst"
       - "/agents/hermes"
-      - "/agents/openclaw"
+      - "/agents/hermes-ai"
     schedule:
       interval: "weekly"
     labels: ["dependencies", "docker"]

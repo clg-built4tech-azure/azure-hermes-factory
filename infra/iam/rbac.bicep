@@ -13,7 +13,7 @@ param rgDevName string = 'rg-hermes-dev'
 param rgProdName string = 'rg-hermes-prod'
 
 @description('ACR name')
-param acrName string = 'ocrocagentdev'
+param acrName string = 'hermesagentdev'
 
 // ──────────────────────────────────────────────
 // Built-in role definition IDs

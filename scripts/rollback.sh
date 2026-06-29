@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rollback script for Azure Container Apps
 # Usage: ./scripts/rollback.sh <agent-name> <environment> <image-tag>
-# Example: ./scripts/rollback.sh hermes dev oc-abc1234
+# Example: ./scripts/rollback.sh hermes dev hermes-abc1234
 
 set -euo pipefail
 
@@ -13,11 +13,11 @@ IMAGE_TAG="${3:?Usage: rollback.sh <agent> <env> <image-tag>}"
 case "${ENV}" in
   dev)
     RG="${RESOURCE_GROUP_DEV:-rg-hermes-dev}"
-    ACR="${ACR_NAME:-ocrocagentdev}"
+    ACR="${ACR_NAME:-hermesagentdev}"
     ;;
   prod)
     RG="${RESOURCE_GROUP_PROD:-rg-hermes-prod}"
-    ACR="${ACR_NAME:-ocrocagentdev}"
+    ACR="${ACR_NAME:-hermesagentdev}"
     ;;
   *)
     echo "ERROR: Unknown environment '${ENV}'. Use 'dev' or 'prod'."
