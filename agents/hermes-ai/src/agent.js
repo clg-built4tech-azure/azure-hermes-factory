@@ -101,6 +101,25 @@ const server = http.createServer(async (req, res) => {
       } catch {
         return sendJson(res, 200, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
       }
+
+      // Streaming method → Server-Sent Events
+      if (rpc && rpc.method === "message/stream") {
+        res.writeHead(200, {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+        });
+        const rpcId = rpc.id !== undefined ? rpc.id : null;
+        try {
+          for await (const event of a2a.runMessageStream(rpc.params || {})) {
+            res.write(`data: ${JSON.stringify({ jsonrpc: "2.0", id: rpcId, result: event })}\n\n`);
+          }
+        } catch (err) {
+          res.write(`data: ${JSON.stringify({ jsonrpc: "2.0", id: rpcId, error: { code: -32603, message: err.message } })}\n\n`);
+        }
+        return res.end();
+      }
+
       return sendJson(res, 200, await a2a.handleRpc(rpc));
     }
 
@@ -127,11 +146,42 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // Convenience: ask THIS agent to STREAM a message to a peer (consumes the
+    // peer's SSE and returns the collected events).
+    // POST /a2a/send-stream  { "to": "analyst", "text": "hello" }
+    if (path === "/a2a/send-stream" && req.method === "POST") {
+      if (!a2a.checkAuth(req.headers)) {
+        return sendJson(res, 401, { error: "Unauthorized" });
+      }
+      let body;
+      try {
+        body = JSON.parse(await readBody(req));
+      } catch {
+        return sendJson(res, 400, { error: "Invalid JSON" });
+      }
+      if (!body.to || !body.text) {
+        return sendJson(res, 400, { error: "Fields 'to' and 'text' are required" });
+      }
+      try {
+        const events = await a2a.sendStreamToPeer(body.to, body.text, { contextId: body.contextId });
+        return sendJson(res, 200, { from: agentName, to: body.to, transport: a2a.config.transport, eventCount: events.length, events });
+      } catch (err) {
+        return sendJson(res, 502, { error: err.message });
+      }
+    }
+
     // Default
     return sendJson(res, 200, {
       agent: agentName,
       runtime: "hermes",
-      a2a: { card: "/.well-known/agent-card.json", endpoint: "/a2a", peers: "/a2a/peers", send: "/a2a/send" },
+      transport: a2a.config.transport,
+      a2a: {
+        card: "/.well-known/agent-card.json",
+        endpoint: "/a2a",
+        peers: "/a2a/peers",
+        send: "/a2a/send",
+        sendStream: "/a2a/send-stream",
+      },
     });
   } catch (err) {
     return sendJson(res, 500, { error: err.message });

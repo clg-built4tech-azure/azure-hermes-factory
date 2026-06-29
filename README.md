@@ -152,38 +152,50 @@ hermesAIContainerAppCount: 3  # Creates hermes-ai-1, hermes-ai-2, hermes-ai-3
 
 ## Inter-Agent Communication (A2A Protocol)
 
-Hermes agents communicate with each other using the **[Agent2Agent (A2A) Protocol](https://a2a-protocol.org/v0.3.0/specification/)** (v0.3.0) — JSON-RPC 2.0 over HTTP. Every agent is both an A2A **server** (it can be messaged) and an A2A **client** (it can message peers).
+Hermes agents communicate with each other using the **[Agent2Agent (A2A) Protocol](https://a2a-protocol.org/v0.3.0/specification/)** (v0.3.0) — JSON-RPC 2.0 over HTTP, including **SSE streaming**. Every agent is both an A2A **server** (it can be messaged) and an A2A **client** (it can message peers).
 
-### How discovery works on Azure Container Apps
+### Transport: Dapr service invocation
 
-Agents in the same Container Apps environment reach each other over the environment's internal DNS. At deploy time, `infra/bicep/modules/container-apps.bicep` injects each agent's peers as the `A2A_PEERS` env var:
+On Azure Container Apps, the agent-to-agent transport is **[Dapr service invocation](https://learn.microsoft.com/en-us/azure/container-apps/dapr-overview)**. The Bicep enables the Dapr sidecar on every app (`appId = "<agent>-<env>"`), and agents call each other through their local sidecar:
 
 ```
-A2A_PEERS=analyst=https://analyst-dev.<env-domain>,hermes-ai-1=https://hermes-ai-1-dev.<env-domain>
+POST http://127.0.0.1:3500/v1.0/invoke/<peer-appId>/method/a2a
 ```
 
-No service registry is required — the peer list is derived from the agents deployed in the environment.
+This gives automatic **mTLS**, retries, and name resolution between agents. Discovery is registry-free: at deploy time `infra/bicep/modules/container-apps.bicep` injects each agent's peers (as Dapr appIds) via `A2A_PEERS`:
+
+```
+A2A_PEERS=analyst=analyst-dev,hermes-ai-1=hermes-ai-1-dev
+```
+
+The agent auto-detects Dapr (via the sidecar's `DAPR_HTTP_PORT`) and falls back to direct HTTP(S) when no sidecar is present — used by local/CI tests. Force a mode with `A2A_TRANSPORT=dapr|direct`.
 
 ### Endpoints exposed by each agent
 
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/.well-known/agent-card.json` | GET | A2A discovery — the agent's capabilities/skills/endpoint |
-| `/a2a` | POST | A2A JSON-RPC endpoint: `message/send`, `tasks/get`, `tasks/cancel` |
+| `/a2a` | POST | A2A JSON-RPC: `message/send`, `message/stream` (SSE), `tasks/get`, `tasks/cancel` |
 | `/a2a/peers` | GET | Introspection — list known peers |
-| `/a2a/send` | POST | Convenience — ask this agent to message a peer: `{"to":"analyst","text":"..."}` |
+| `/a2a/send` | POST | Convenience — message a peer: `{"to":"analyst","text":"..."}` |
+| `/a2a/send-stream` | POST | Convenience — stream a message to a peer (collects SSE events) |
 | `/health` | GET | Liveness/readiness |
 
 ### Example: one agent messaging another
 
 ```bash
-# Ask hermes to send an A2A message to analyst
+# Non-streaming: ask hermes to send an A2A message to analyst
 curl -X POST https://hermes-dev.<env-domain>/a2a/send \
   -H "content-type: application/json" \
   -d '{"to":"analyst","text":"summarize the latest deployment"}'
+
+# Streaming (SSE): incremental artifact chunks + status updates
+curl -N -X POST https://analyst-dev.<env-domain>/a2a \
+  -H "content-type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"message/stream","params":{"message":{"role":"user","messageId":"m1","parts":[{"kind":"text","text":"hello"}]}}}'
 ```
 
-The receiving agent creates an A2A **Task**, processes the message via its local runtime, and returns the completed task (with `history` and `artifacts`).
+The receiving agent creates an A2A **Task**, processes the message via its local runtime, and returns the completed task (with `history` and `artifacts`). For `message/stream`, it emits SSE events: an initial `task`, a `working` status, incremental `artifact-update` chunks, then a final `completed` status.
 
 ### Authentication
 
@@ -193,7 +205,7 @@ Set a shared bearer token to require auth on all A2A calls (recommended for prod
 az deployment sub create ... --parameters a2aAuthToken="$(openssl rand -hex 32)"
 ```
 
-The token is stored as a Container Apps **secret** and injected as `A2A_AUTH_TOKEN`. When set, inbound `/a2a` and `/a2a/send` requests require `Authorization: Bearer <token>`, and outbound calls include it automatically. Leave empty to disable auth (dev only).
+The token is stored as a Container Apps **secret** and injected as `A2A_AUTH_TOKEN`. When set, inbound `/a2a`, `/a2a/send`, and `/a2a/send-stream` requests require `Authorization: Bearer <token>`, and outbound calls include it automatically. Leave empty to disable auth (dev only). This is layered on top of Dapr's own mTLS between sidecars.
 
 ### Plugging in the runtime
 
