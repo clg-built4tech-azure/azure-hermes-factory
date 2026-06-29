@@ -11,7 +11,7 @@ let hermesAgentReady = false;
 let hermesAgentExitCode = null;
 
 const hermesAgent = spawn(
-  "hermes-agent",
+  "openclaw",
   ["gateway", "run", "--allow-unconfigured", "--bind", "auto", "--port", gatewayPort, "--force"],
   {
   stdio: "inherit",

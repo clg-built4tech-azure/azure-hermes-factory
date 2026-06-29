@@ -163,7 +163,7 @@ hermesAIContainerAppCount: 3  # Creates hermes-ai-1, hermes-ai-2, hermes-ai-3
 ### Agent fails to start
 1. Check container logs: `az containerapp logs show --name <agent-name> --resource-group <rg>`
 2. Verify configuration file: `agents/<agent-name>/config/hermes.json`
-3. Validate Hermes runtime: `hermes-agent --version`
+3. Validate Hermes runtime: `openclaw --version`
 
 ### Deployment rollback issues
 Run: `./scripts/rollback.sh <agent> <env> <tag>`
