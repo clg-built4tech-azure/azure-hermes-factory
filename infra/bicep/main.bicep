@@ -38,6 +38,10 @@ param hermesAIContainerAppCount int = 0
 @description('Log Analytics workspace name')
 param logAnalyticsName string = 'hermes-logs'
 
+@description('Optional shared bearer token to authenticate Agent2Agent (A2A) requests between agents. Leave empty to disable A2A auth (dev only). Pass via a secure pipeline variable in production.')
+@secure()
+param a2aAuthToken string = ''
+
 // ──────────────────────────────────────────────
 // Resource Groups
 // ──────────────────────────────────────────────
@@ -116,6 +120,7 @@ module containerAppsDev './modules/container-apps.bicep' = {
     environmentSuffix: 'dev'
     acaEnvName: acaEnvDevName
     location: location
+    a2aAuthToken: a2aAuthToken
   }
   dependsOn: [
     acaEnvDev
@@ -134,6 +139,7 @@ module containerAppsProd './modules/container-apps.bicep' = {
     environmentSuffix: 'prod'
     acaEnvName: acaEnvProdName
     location: location
+    a2aAuthToken: a2aAuthToken
   }
   dependsOn: [
     acaEnvProd

@@ -150,6 +150,55 @@ Generic Hermes AI Container Apps can be provisioned dynamically via the `hermesA
 hermesAIContainerAppCount: 3  # Creates hermes-ai-1, hermes-ai-2, hermes-ai-3
 ```
 
+## Inter-Agent Communication (A2A Protocol)
+
+Hermes agents communicate with each other using the **[Agent2Agent (A2A) Protocol](https://a2a-protocol.org/v0.3.0/specification/)** (v0.3.0) — JSON-RPC 2.0 over HTTP. Every agent is both an A2A **server** (it can be messaged) and an A2A **client** (it can message peers).
+
+### How discovery works on Azure Container Apps
+
+Agents in the same Container Apps environment reach each other over the environment's internal DNS. At deploy time, `infra/bicep/modules/container-apps.bicep` injects each agent's peers as the `A2A_PEERS` env var:
+
+```
+A2A_PEERS=analyst=https://analyst-dev.<env-domain>,hermes-ai-1=https://hermes-ai-1-dev.<env-domain>
+```
+
+No service registry is required — the peer list is derived from the agents deployed in the environment.
+
+### Endpoints exposed by each agent
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/.well-known/agent-card.json` | GET | A2A discovery — the agent's capabilities/skills/endpoint |
+| `/a2a` | POST | A2A JSON-RPC endpoint: `message/send`, `tasks/get`, `tasks/cancel` |
+| `/a2a/peers` | GET | Introspection — list known peers |
+| `/a2a/send` | POST | Convenience — ask this agent to message a peer: `{"to":"analyst","text":"..."}` |
+| `/health` | GET | Liveness/readiness |
+
+### Example: one agent messaging another
+
+```bash
+# Ask hermes to send an A2A message to analyst
+curl -X POST https://hermes-dev.<env-domain>/a2a/send \
+  -H "content-type: application/json" \
+  -d '{"to":"analyst","text":"summarize the latest deployment"}'
+```
+
+The receiving agent creates an A2A **Task**, processes the message via its local runtime, and returns the completed task (with `history` and `artifacts`).
+
+### Authentication
+
+Set a shared bearer token to require auth on all A2A calls (recommended for prod):
+
+```bash
+az deployment sub create ... --parameters a2aAuthToken="$(openssl rand -hex 32)"
+```
+
+The token is stored as a Container Apps **secret** and injected as `A2A_AUTH_TOKEN`. When set, inbound `/a2a` and `/a2a/send` requests require `Authorization: Bearer <token>`, and outbound calls include it automatically. Leave empty to disable auth (dev only).
+
+### Plugging in the runtime
+
+By default the A2A handler returns a deterministic processed reply. To route incoming messages to the real agent runtime, point `A2A_EXECUTOR_URL` at a local HTTP endpoint that accepts `{"input":"..."}` and returns `{"output":"..."}` (e.g. a thin adapter in front of the openclaw gateway). Set `AGENT_RUNTIME_ENABLED=false` to run the A2A layer without spawning the runtime (used by local/CI tests).
+
 ## Security Considerations
 
 - All resources use managed identities for authentication
