@@ -4,8 +4,8 @@ WORKDIR /app
 
 # Install Hermes Agent
 ARG HERMES_VERSION=2026.6.10
-RUN npm install -g "hermes-agent@${HERMES_VERSION}" \
-  && command -v hermes-agent
+RUN npm install -g "openclaw@${HERMES_VERSION}" \
+  && command -v openclaw
 
 # Copy agent source and config
 COPY src/ ./src/
