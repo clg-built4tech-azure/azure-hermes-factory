@@ -1,7 +1,9 @@
 // modules/container-apps.bicep - Creates Container Apps for each agent
-// Each app is wired for Agent2Agent (A2A) communication: it receives the list
-// of its peers (other agents in the same environment) via the A2A_PEERS env var,
-// resolved through Azure Container Apps' in-environment DNS.
+// Each app is wired for Agent2Agent (A2A) communication over **Dapr service
+// invocation**: Dapr is enabled per app (appId = "<agent>-<env>"), and each app
+// receives the list of peer Dapr appIds via the A2A_PEERS env var. Agents call
+// each other through their local Dapr sidecar (automatic mTLS, retries, name
+// resolution) rather than directly over ingress DNS.
 
 param agentNames array
 @minValue(0)
@@ -21,9 +23,6 @@ var defaultImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 var hermesAIContainerAppNames = [for index in range(0, hermesAIContainerAppCount): 'hermes-ai-${index + 1}']
 var containerAppNames = concat(agentNames, hermesAIContainerAppNames)
 
-// Full Container App names (with env suffix) used for in-environment DNS.
-var appFullNames = [for name in containerAppNames: '${name}-${environmentSuffix}']
-
 resource acaEnv 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
   name: acaEnvName
 }
@@ -39,6 +38,14 @@ resource containerApps 'Microsoft.App/containerApps@2024-03-01' = [for (agentNam
     managedEnvironmentId: acaEnv.id
     configuration: {
       activeRevisionsMode: 'Single'
+      // Enable the Dapr sidecar for A2A service invocation between agents.
+      dapr: {
+        enabled: true
+        appId: '${agentName}-${environmentSuffix}'
+        appProtocol: 'http'
+        appPort: 8080
+        enableApiLogging: true
+      }
       ingress: {
         external: true
         targetPort: 8080
@@ -66,16 +73,26 @@ resource containerApps 'Microsoft.App/containerApps@2024-03-01' = [for (agentNam
               name: 'AGENT_NAME'
               value: agentName
             }
+            // Use the Dapr sidecar for A2A calls between agents.
+            {
+              name: 'A2A_TRANSPORT'
+              value: 'dapr'
+            }
+            // This agent's own Dapr appId.
+            {
+              name: 'A2A_SELF_APP_ID'
+              value: '${agentName}-${environmentSuffix}'
+            }
             // This agent's own A2A base URL (its Agent Card lives at <url>/.well-known/agent-card.json)
             {
               name: 'A2A_SELF_URL'
               value: 'https://${agentName}-${environmentSuffix}.${envDomain}'
             }
-            // Peer registry: every OTHER agent in this environment, reachable over
-            // the in-environment HTTPS FQDN. Format: "name=url,name=url".
+            // Peer registry: every OTHER agent in this environment, addressed by
+            // its Dapr appId. Format: "name=appId,name=appId".
             {
               name: 'A2A_PEERS'
-              value: join(map(filter(appFullNames, name => name != '${agentName}-${environmentSuffix}'), name => '${name}=https://${name}.${envDomain}'), ',')
+              value: join(map(filter(containerAppNames, peer => peer != agentName), peer => '${peer}=${peer}-${environmentSuffix}'), ',')
             }
           ], useA2AAuth ? [
             {
